@@ -17,7 +17,7 @@ from selenium.webdriver.chrome.service import Service
 
 
 class SquooshService:
-    """Servicio para comprimir imágenes usando Squoosh sin usar filesystem permanente"""
+    """Service for compressing images using Squoosh without permanent filesystem usage"""
 
     def __init__(self, headless: bool = True):
         self.headless = headless
@@ -33,13 +33,13 @@ class SquooshService:
         self.close()
 
     def _setup_driver(self):
-        """Configurar el driver de Chrome para entorno Docker/Linux"""
+        """Configure Chrome driver for Docker/Linux environment"""
         chrome_options = Options()
 
         if self.headless:
             chrome_options.add_argument("--headless")
 
-        # Opciones específicas para Docker/Linux
+        # Specific options for Docker/Linux
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
@@ -51,10 +51,10 @@ class SquooshService:
         chrome_options.add_argument("--disable-ipc-flooding-protection")
         chrome_options.add_argument("--window-size=1920,1080")
 
-        # Crear directorio temporal
+        # Create temporary directory
         self.temp_dir = tempfile.mkdtemp()
 
-        # Configurar directorio de descarga temporal
+        # Configure temporary download directory
         prefs = {
             "download.default_directory": self.temp_dir,
             "download.prompt_for_download": False,
@@ -63,9 +63,9 @@ class SquooshService:
         }
         chrome_options.add_experimental_option("prefs", prefs)
 
-        # Configurar driver
+        # Configure driver
         try:
-            # En Docker, usar Chrome binario del sistema
+            # In Docker, use system Chrome binary
             if os.getenv("CHROME_BIN"):
                 chrome_options.binary_location = os.getenv("CHROME_BIN")
 
@@ -74,7 +74,7 @@ class SquooshService:
             self.wait = WebDriverWait(self.driver, 30)
 
         except Exception as e:
-            raise Exception(f"Error configurando Chrome driver: {e}")
+            raise Exception(f"Error configuring Chrome driver: {e}")
 
     def compress_image_from_bytes(
             self,
@@ -84,43 +84,43 @@ class SquooshService:
             original_filename: str = "image"
     ) -> Optional[bytes]:
         """
-        Comprimir imagen desde bytes
-        
+        Compress image from bytes
+
         Args:
-            image_bytes: Bytes de la imagen original
-            format_type: Formato de salida ('webp', 'mozjpeg', 'avif', 'oxipng')
-            quality: Calidad de compresión (0-100)
-            original_filename: Nombre del archivo original (para extensión)
-        
+            image_bytes: Original image bytes
+            format_type: Output format ('webp', 'mozjpeg', 'avif', 'oxipng')
+            quality: Compression quality (0-100)
+            original_filename: Original filename (for extension)
+
         Returns:
-            bytes: Imagen comprimida o None si hay error
+            bytes: Compressed image or None if error
         """
         temp_input_path = None
 
         try:
-            # Validar imagen
+            # Validate image
             try:
                 img = Image.open(BytesIO(image_bytes))
                 img.verify()
             except Exception:
-                raise ValueError("Los bytes no corresponden a una imagen válida")
+                raise ValueError("Bytes do not correspond to a valid image")
 
-            # Crear archivo temporal de entrada
+            # Create temporary input file
             file_ext = self._get_file_extension(original_filename)
             temp_input_path = os.path.join(self.temp_dir, f"input{file_ext}")
 
             with open(temp_input_path, 'wb') as f:
                 f.write(image_bytes)
 
-            # Procesar con Squoosh
+            # Process with Squoosh
             compressed_path = self._compress_with_squoosh(temp_input_path, format_type, quality)
 
             if compressed_path and os.path.exists(compressed_path):
-                # Leer imagen comprimida
+                # Read compressed image
                 with open(compressed_path, 'rb') as f:
                     compressed_bytes = f.read()
 
-                # Limpiar archivos temporales
+                # Clean up temporary files
                 self._cleanup_temp_files([temp_input_path, compressed_path])
 
                 return compressed_bytes
@@ -128,42 +128,42 @@ class SquooshService:
             return None
 
         except Exception as e:
-            # Limpiar archivos temporales en caso de error
+            # Clean up temporary files on error
             if temp_input_path:
                 self._cleanup_temp_files([temp_input_path])
-            raise Exception(f"Error comprimiendo imagen: {e}")
+            raise Exception(f"Error compressing image: {e}")
 
     def _compress_with_squoosh(self, image_path: str, format_type: str, quality: int) -> Optional[str]:
-        """Comprimir imagen usando Squoosh web app"""
+        """Compress image using Squoosh web app"""
         try:
-            # Navegar a Squoosh
+            # Navigate to Squoosh
             self.driver.get("https://squoosh.app/editor")
             time.sleep(3)
 
-            # Subir imagen
+            # Upload image
             file_input = self.driver.find_element(By.CSS_SELECTOR, "input[type='file']")
             file_input.send_keys(os.path.abspath(image_path))
 
-            # Esperar a que aparezcan los resultados
+            # Wait for results to appear
             self.wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "._results_17s86_26"))
             )
             time.sleep(3)
 
-            # Configurar formato y calidad
+            # Configure format and quality
             self._set_format(format_type, quality)
             time.sleep(3)
 
-            # Descargar imagen procesada
+            # Download processed image
             return self._download_compressed()
 
         except Exception as e:
-            raise Exception(f"Error en Squoosh: {e}")
+            raise Exception(f"Error in Squoosh: {e}")
 
     def _set_format(self, format_type: str, quality: int):
-        """Configurar formato y calidad"""
+        """Configure format and quality"""
         try:
-            # Mapeo de formatos
+            # Format mapping
             format_map = {
                 "webp": "webP",
                 "mozjpeg": "mozJPEG",
@@ -178,7 +178,7 @@ class SquooshService:
 
             format_value = format_map.get(format_type.lower(), "webP")
 
-            # Cambiar formato
+            # Change format
             format_select = self.wait.until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "select._builtin-select_1onzk_5"))
             )
@@ -187,7 +187,7 @@ class SquooshService:
             self.driver.execute_script("arguments[0].dispatchEvent(new Event('change'))", format_select)
             time.sleep(3)
 
-            # Ajustar calidad si está disponible
+            # Adjust quality if available
             try:
                 quality_input = self.wait.until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='range'][name='quality']"))
@@ -199,18 +199,18 @@ class SquooshService:
                 time.sleep(2)
 
             except TimeoutException:
-                pass  # Control de calidad no disponible para este formato
+                pass  # Quality control not available for this format
 
         except Exception as e:
-            raise Exception(f"Error configurando formato: {e}")
+            raise Exception(f"Error configuring format: {e}")
 
     def _download_compressed(self) -> Optional[str]:
-        """Descargar imagen comprimida"""
+        """Download compressed image"""
         try:
-            # Obtener archivos existentes antes de la descarga
+            # Get existing files before download
             files_before = set(os.listdir(self.temp_dir))
 
-            # Buscar enlace de descarga habilitado
+            # Search for enabled download link
             download_link = None
             max_attempts = 20
 
@@ -222,7 +222,7 @@ class SquooshService:
                         classes = link.get_attribute('class') or ''
                         download_name = link.get_attribute('download') or ''
 
-                        # Buscar link que no esté deshabilitado y no sea la imagen original
+                        # Search for link that is not disabled and not the original image
                         if ('_download-disable_' not in classes and
                                 download_name and
                                 link.is_enabled() and
@@ -239,9 +239,9 @@ class SquooshService:
                     time.sleep(2)
 
             if not download_link:
-                raise Exception("No se encontró botón de descarga habilitado")
+                raise Exception("No enabled download button found")
 
-            # Hacer scroll y click
+            # Scroll and click
             self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", download_link)
             time.sleep(1)
 
@@ -250,7 +250,7 @@ class SquooshService:
             except Exception:
                 self.driver.execute_script("arguments[0].click();", download_link)
 
-            # Esperar descarga
+            # Wait for download
             for _ in range(30):
                 time.sleep(1)
                 files_after = set(os.listdir(self.temp_dir))
@@ -260,18 +260,18 @@ class SquooshService:
                     downloaded_file = os.path.join(self.temp_dir, list(new_files)[0])
                     return downloaded_file
 
-            raise Exception("Timeout esperando descarga")
+            raise Exception("Timeout waiting for download")
 
         except Exception as e:
-            raise Exception(f"Error descargando: {e}")
+            raise Exception(f"Error downloading: {e}")
 
     def _get_file_extension(self, filename: str) -> str:
-        """Obtener extensión del archivo"""
+        """Get file extension"""
         _, ext = os.path.splitext(filename.lower())
         return ext if ext else '.jpg'
 
     def _cleanup_temp_files(self, file_paths: list):
-        """Limpiar archivos temporales"""
+        """Clean up temporary files"""
         for file_path in file_paths:
             try:
                 if os.path.exists(file_path):
@@ -280,14 +280,14 @@ class SquooshService:
                 pass
 
     def close(self):
-        """Cerrar recursos"""
+        """Close resources"""
         if self.driver:
             try:
                 self.driver.quit()
             except Exception:
                 pass
 
-        # Limpiar directorio temporal
+        # Clean up temporary directory
         if self.temp_dir and os.path.exists(self.temp_dir):
             try:
                 import shutil
@@ -296,7 +296,7 @@ class SquooshService:
                 pass
 
     def get_compression_stats(self, original_bytes: bytes, compressed_bytes: bytes) -> dict:
-        """Calcular estadísticas de compresión"""
+        """Calculate compression statistics"""
         original_size = len(original_bytes)
         compressed_size = len(compressed_bytes)
         reduction_percent = ((original_size - compressed_size) / original_size) * 100

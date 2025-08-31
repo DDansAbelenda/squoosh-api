@@ -18,11 +18,11 @@ async def health_check():
 
 @router.get("/", response_model=dict)
 async def root():
-    """Root endpoint con información básica"""
+    """Root endpoint with basic information"""
     return {
         "service": "Squoosh API",
         "version": "1.0.0",
-        "description": "API para compresión de imágenes usando Squoosh",
+        "description": "API for image compression using Squoosh",
         "endpoints": {
             "compress_base64": "/compress/base64",
             "compress_upload": "/compress/upload",
@@ -34,9 +34,9 @@ async def root():
 
 
 def _check_chrome_available() -> bool:
-    """Verificar si Google Chrome está disponible"""
+    """Check if Google Chrome is available"""
     try:
-        # Verificar si el binario de Chrome existe
+        # Check if Chrome binary exists
         chrome_paths = [
             "/usr/bin/google-chrome",
             "/usr/bin/google-chrome-stable", 
@@ -48,7 +48,7 @@ def _check_chrome_available() -> bool:
             if shutil.which(path):
                 return True
         
-        # Intentar ejecutar Chrome para verificar
+        # Try to execute Chrome to verify
         result = subprocess.run(
             ["google-chrome", "--version"], 
             capture_output=True, 

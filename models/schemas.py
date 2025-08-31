@@ -5,7 +5,7 @@ import base64
 
 
 class CompressionFormat(str, Enum):
-    """Formatos de compresión soportados"""
+    """Supported compression formats"""
     WEBP = "webp"
     MOZJPEG = "mozjpeg"
     AVIF = "avif"
@@ -16,65 +16,65 @@ class CompressionFormat(str, Enum):
 
 
 class CompressionRequest(BaseModel):
-    """Request para comprimir imagen"""
-    image_base64: str = Field(..., description="Imagen en formato base64")
-    format: CompressionFormat = Field(default=CompressionFormat.WEBP, description="Formato de salida")
-    quality: int = Field(default=80, ge=1, le=100, description="Calidad de compresión (1-100)")
-    filename: Optional[str] = Field(default="image.jpg", description="Nombre del archivo original")
+    """Request to compress image"""
+    image_base64: str = Field(..., description="Image in base64 format")
+    format: CompressionFormat = Field(default=CompressionFormat.WEBP, description="Output format")
+    quality: int = Field(default=80, ge=1, le=100, description="Compression quality (1-100)")
+    filename: Optional[str] = Field(default="image.jpg", description="Original filename")
 
     @field_validator('image_base64')
     def validate_base64(cls, v):
         try:
-            # Remover prefijo data URL si existe
+            # Remove data URL prefix if exists
             if v.startswith('data:'):
                 v = v.split(',', 1)[1]
 
-            # Validar que es base64 válido
+            # Validate that it's valid base64
             base64.b64decode(v)
             return v
         except Exception:
-            raise ValueError('image_base64 debe ser una cadena base64 válida')
+            raise ValueError('image_base64 must be a valid base64 string')
 
     @field_validator('filename')
     def validate_filename(cls, v):
         if v and not any(v.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff']):
-            return v + '.jpg'  # Agregar extensión por defecto
+            return v + '.jpg'  # Add default extension
         return v
 
 
 class CompressionStats(BaseModel):
-    """Estadísticas de compresión"""
-    original_size: int = Field(..., description="Tamaño original en bytes")
-    compressed_size: int = Field(..., description="Tamaño comprimido en bytes")
-    reduction_percent: float = Field(..., description="Porcentaje de reducción")
-    compression_ratio: float = Field(..., description="Ratio de compresión")
+    """Compression statistics"""
+    original_size: int = Field(..., description="Original size in bytes")
+    compressed_size: int = Field(..., description="Compressed size in bytes")
+    reduction_percent: float = Field(..., description="Reduction percentage")
+    compression_ratio: float = Field(..., description="Compression ratio")
 
 
 class CompressionResponse(BaseModel):
-    """Response de compresión exitosa"""
+    """Successful compression response"""
     success: bool = Field(default=True)
-    compressed_image_base64: str = Field(..., description="Imagen comprimida en base64")
-    format: str = Field(..., description="Formato de salida utilizado")
-    quality: int = Field(..., description="Calidad utilizada")
-    stats: CompressionStats = Field(..., description="Estadísticas de compresión")
-    filename: str = Field(..., description="Nombre del archivo procesado")
+    compressed_image_base64: str = Field(..., description="Compressed image in base64")
+    format: str = Field(..., description="Output format used")
+    quality: int = Field(..., description="Quality used")
+    stats: CompressionStats = Field(..., description="Compression statistics")
+    filename: str = Field(..., description="Processed filename")
 
 
 class ErrorResponse(BaseModel):
-    """Response de error"""
+    """Error response"""
     success: bool = Field(default=False)
-    error: str = Field(..., description="Mensaje de error")
-    details: Optional[str] = Field(None, description="Detalles adicionales del error")
+    error: str = Field(..., description="Error message")
+    details: Optional[str] = Field(None, description="Additional error details")
 
 
 class HealthResponse(BaseModel):
-    """Response del health check"""
+    """Health check response"""
     status: str = Field(default="healthy")
     service: str = Field(default="squoosh-api")
     version: str = Field(default="1.0.0")
-    chrome_available: bool = Field(..., description="Chrome disponible")
+    chrome_available: bool = Field(..., description="Chrome available")
 
 
 class SupportedFormatsResponse(BaseModel):
-    """Response con formatos soportados"""
-    formats: dict = Field(..., description="Diccionario de formatos soportados y sus descripciones")
+    """Response with supported formats"""
+    formats: dict = Field(..., description="Dictionary of supported formats and their descriptions")
