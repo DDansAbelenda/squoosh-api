@@ -26,12 +26,26 @@ async def lifespan(app: FastAPI):
         # Verify critical dependencies on startup
         from services.squoosh_service import SquooshService
         logger.info("✅ Services loaded correctly")
+
+        # Log Chrome and ChromeDriver versions
+        import subprocess
+        try:
+            chrome_version = subprocess.check_output(["/usr/bin/google-chrome-stable", "--version"],
+                                                     text=True).strip()
+            logger.info(f"🌐 Chrome version: {chrome_version}")
+
+            chromedriver_version = subprocess.check_output(["/usr/local/bin/chromedriver", "--version"],
+                                                           text=True).strip()
+            logger.info(f"🚗 ChromeDriver version: {chromedriver_version}")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not verify Chrome/ChromeDriver versions: {e}")
+
     except Exception as e:
         logger.error(f"❌ Error loading services: {e}")
         raise e
-    
+
     yield
-    
+
     # Shutdown
     logger.info("🛑 Closing Squoosh API...")
 
@@ -47,7 +61,7 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc"
     )
-    
+
     # Configure CORS
     app.add_middleware(
         CORSMiddleware,
@@ -56,7 +70,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Global exception handler
     @app.exception_handler(Exception)
     async def global_exception_handler(request, exc):
@@ -69,11 +83,11 @@ def create_app() -> FastAPI:
                 "details": str(exc) if os.getenv("DEBUG") else None
             }
         )
-    
+
     # Include routers
     app.include_router(health_router)
     app.include_router(compression_router)
-    
+
     return app
 
 
@@ -86,7 +100,7 @@ if __name__ == "__main__":
     # Usar puerto dinámico de Railway o 8000 por defecto
     port = int(os.environ.get("PORT", 8000))
 
-    logger.info(f"🌐 Starting server on port {port}")
+    logger.info(f"🌐 Starting server on 0.0.0.0:{port}")
 
     uvicorn.run(
         "main:app",

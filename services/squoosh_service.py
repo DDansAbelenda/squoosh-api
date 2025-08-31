@@ -8,73 +8,90 @@ from PIL import Image
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException
-from webdriver_manager.chrome import ChromeDriverManager
+import logging
 from selenium.webdriver.chrome.service import Service
-
+logger = logging.getLogger(__name__)
 
 class SquooshService:
     """Service for compressing images using Squoosh without permanent filesystem usage"""
 
-    def __init__(self, headless: bool = True):
-        self.headless = headless
+    def __init__(self):
         self.driver = None
-        self.wait = None
-        self.temp_dir = None
 
-    def __enter__(self):
-        self._setup_driver()
-        return self
+    def _get_chrome_options(self):
+        """Configurar opciones de Chrome para Railway"""
+        options = Options()
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+        # Opciones esenciales para headless
+        options.add_argument('--headless=new')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--disable-web-security')
+        options.add_argument('--disable-features=VizDisplayCompositor')
 
-    def _setup_driver(self):
-        """Configure Chrome driver for Docker/Linux environment"""
-        chrome_options = Options()
+        # Optimizaciones de memoria
+        options.add_argument('--memory-pressure-off')
+        options.add_argument('--max_old_space_size=4096')
+        options.add_argument('--disable-background-timer-throttling')
+        options.add_argument('--disable-backgrounding-occluded-windows')
+        options.add_argument('--disable-renderer-backgrounding')
 
-        if self.headless:
-            chrome_options.add_argument("--headless")
+        # Configurar user agent
+        options.add_argument('--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')
 
-        # Specific options for Docker/Linux
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--disable-extensions")
-        chrome_options.add_argument("--disable-background-timer-throttling")
-        chrome_options.add_argument("--disable-backgrounding-occluded-windows")
-        chrome_options.add_argument("--disable-renderer-backgrounding")
-        chrome_options.add_argument("--disable-features=TranslateUI")
-        chrome_options.add_argument("--disable-ipc-flooding-protection")
-        chrome_options.add_argument("--window-size=1920,1080")
+        # Tamaño de ventana
+        options.add_argument('--window-size=1920,1080')
 
-        # Create temporary directory
-        self.temp_dir = tempfile.mkdtemp()
+        # Configurar binario de Chrome si existe
+        chrome_bin = os.environ.get('CHROME_BIN', '/usr/bin/google-chrome-stable')
+        if os.path.exists(chrome_bin):
+            options.binary_location = chrome_bin
 
-        # Configure temporary download directory
-        prefs = {
-            "download.default_directory": self.temp_dir,
-            "download.prompt_for_download": False,
-            "download.directory_upgrade": True,
-            "safebrowsing.enabled": True
-        }
-        chrome_options.add_experimental_option("prefs", prefs)
+        return options
 
-        # Configure driver
+    def _get_chrome_service(self):
+        """Configurar servicio de ChromeDriver"""
+        chromedriver_path = os.environ.get('CHROMEDRIVER_PATH', '/usr/local/bin/chromedriver')
+
+        if os.path.exists(chromedriver_path):
+            logger.info(f"Using ChromeDriver at: {chromedriver_path}")
+            return Service(chromedriver_path)
+        else:
+            # Fallback a WebDriver Manager
+            logger.warning("ChromeDriver not found, falling back to WebDriver Manager")
+            from webdriver_manager.chrome import ChromeDriverManager
+            return Service(ChromeDriverManager().install())
+
+    def create_driver(self):
+        """Crear instancia de WebDriver"""
         try:
-            # In Docker, use system Chrome binary
-            if os.getenv("CHROME_BIN"):
-                chrome_options.binary_location = os.getenv("CHROME_BIN")
+            options = self._get_chrome_options()
+            service = self._get_chrome_service()
 
-            service = Service(ChromeDriverManager().install())
-            self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            self.wait = WebDriverWait(self.driver, 30)
+            logger.info("Creating Chrome WebDriver...")
+            self.driver = webdriver.Chrome(service=service, options=options)
+            logger.info("✅ Chrome WebDriver created successfully")
+
+            return self.driver
 
         except Exception as e:
+            logger.error(f"❌ Error creating Chrome driver: {e}")
             raise Exception(f"Error configuring Chrome driver: {e}")
+
+    def close_driver(self):
+        """Cerrar WebDriver si existe"""
+        if self.driver:
+            try:
+                self.driver.quit()
+                logger.info("✅ Chrome WebDriver closed")
+            except Exception as e:
+                logger.warning(f"Warning closing driver: {e}")
+            finally:
+                self.driver = None
 
     def compress_image_from_bytes(
             self,
