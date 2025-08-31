@@ -11,9 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Instalar dependencias del sistema y Chrome con ChromeDriver
 RUN apt-get update && apt-get install -y \
-    # Herramientas básicas
     wget curl unzip gnupg ca-certificates \
-    # Dependencias de Chrome
     fonts-liberation libasound2 libatk-bridge2.0-0 libatk1.0-0 \
     libatspi2.0-0 libdrm2 libgtk-3-0 libnspr4 libnss3 \
     libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
