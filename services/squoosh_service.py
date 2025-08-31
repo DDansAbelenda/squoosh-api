@@ -11,8 +11,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.service import Service
+from chromedriver_config import get_chrome_service
 
 
 class SquooshService:
@@ -68,7 +67,8 @@ class SquooshService:
             if os.getenv("CHROME_BIN"):
                 chrome_options.binary_location = os.getenv("CHROME_BIN")
 
-            service = Service(ChromeDriverManager().install())
+
+            service = get_chrome_service()
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
             self.wait = WebDriverWait(self.driver, 30)
 
