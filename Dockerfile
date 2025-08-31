@@ -1,4 +1,3 @@
-# Dockerfile optimizado para Railway con Selenium/Chrome
 FROM python:3.12-slim
 
 # Variables de entorno
@@ -6,8 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
     CHROME_BIN=/usr/bin/google-chrome-stable \
-    CHROMEDRIVER_PATH=/usr/local/bin/chromedriver \
-    DISPLAY=:99
+    CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
 
 # Instalar dependencias del sistema y Chrome con ChromeDriver
 RUN apt-get update && apt-get install -y \
@@ -21,18 +19,19 @@ RUN apt-get update && apt-get install -y \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
     && CHROME_VERSION=$(google-chrome --version | cut -d ' ' -f3 | cut -d '.' -f1-3) \
-    && wget -q "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}.0/linux64/chromedriver-linux64.zip" -O chromedriver.zip \
-    && unzip chromedriver.zip \
-    && mv chromedriver-linux64/chromedriver /usr/local/bin/ \
+    && echo "Chrome version: $CHROME_VERSION" \
+    && wget -q "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}.0/linux64/chromedriver-linux64.zip" -O /tmp/chromedriver.zip \
+    && unzip /tmp/chromedriver.zip -d /tmp/ \
+    && mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/ \
     && chmod +x /usr/local/bin/chromedriver \
-    && rm -rf chromedriver.zip chromedriver-linux64 \
+    && rm -rf /tmp/chromedriver* \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
 # Directorio de trabajo
 WORKDIR /app
 
-# Copiar requirements primero (para cache de Docker)
+# Copiar requirements primero (para mejor cache de Docker)
 COPY requirements.txt* ./
 
 # Instalar dependencias Python
@@ -47,11 +46,15 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copiar el resto del código
 COPY . .
 
-# Verificar instalación
-RUN google-chrome --version && chromedriver --version
+# Verificar instalación (esto aparecerá en los logs de build)
+RUN echo "=== Verification ===" \
+    && google-chrome --version \
+    && chromedriver --version \
+    && python --version \
+    && echo "=== Ready ==="
 
-# Exponer puerto
-EXPOSE 8000
+# Puerto dinámico de Railway
+EXPOSE $PORT
 
 # Comando de inicio
 CMD ["python", "main.py"]
