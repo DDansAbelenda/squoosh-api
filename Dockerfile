@@ -1,50 +1,15 @@
-# Build stage
-FROM python:3.12-slim AS builder
-
-# Install system dependencies for Chrome and Selenium
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    unzip \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Google Chrome
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/*
-
-# Poetry configuration
-ENV POETRY_NO_INTERACTION=1 \
-    POETRY_VIRTUALENVS_CREATE=true \
-    POETRY_VIRTUALENVS_IN_PROJECT=true \
-    PIP_NO_CACHE_DIR=1
-
-WORKDIR /app
-
-# Install Poetry
-RUN pip install poetry==2.1.3
-
-# Copy dependency files
-COPY pyproject.toml poetry.lock* ./
-
-# Install dependencies
-RUN poetry install --no-root --no-dev
-
-# Copy application code
-COPY . .
-
-# Deploy stage
+# Dockerfile minimal para Railway (sin Poetry)
 FROM python:3.12-slim
 
-# Install runtime dependencies for Chrome
+# Evitar prompts interactivos
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
     wget \
-    gnupg \
-    unzip \
     curl \
+    gnupg \
+    ca-certificates \
     fonts-liberation \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -60,35 +25,48 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     libxss1 \
     libxtst6 \
-    xdg-utils \
-    && rm -rf /var/lib/apt/lists/*
+    xdg-utils
 
-# Install Google Chrome
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
+# Instalar Chrome usando método nuevo
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor > /etc/apt/trusted.gpg.d/google-chrome.gpg \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y google-chrome-stable
 
-# Create non-root user
-RUN adduser --disabled-password --gecos "" myuser
+# Limpiar cache
+RUN rm -rf /var/lib/apt/lists/*
 
+# Directorio de trabajo
 WORKDIR /app
 
-# Copy application from builder
-COPY --from=builder --chown=myuser:myuser /app /app
+# Copiar requirements
+COPY requirements.txt* ./
 
-# Switch to non-root user
-USER myuser
+# Instalar dependencias Python
+RUN pip install --no-cache-dir \
+    fastapi==0.115.0 \
+    uvicorn[standard]==0.30.0 \
+    selenium==4.25.0 \
+    webdriver-manager==4.0.0 \
+    pillow==10.4.0 \
+    python-multipart==0.0.9
 
-# Environment variables
+# Copiar código
+COPY . .
+
+# Usuario no-root
+RUN adduser --disabled-password --gecos "" appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
+# Variables de entorno
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPYCACHEPREFIX=/tmp \
-    CHROME_BIN=/usr/bin/google-chrome \
-    DISPLAY=:99
+    PYTHONUNBUFFERED=1 \
+    CHROME_BIN=/usr/bin/google-chrome
 
-# Expose port
+# Puerto
 EXPOSE 8000
 
-# Run application
-CMD ["sh", "-c", "exec /app/.venv/bin/uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Comando de inicio
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
