@@ -69,8 +69,5 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     CHROME_BIN=/usr/bin/google-chrome
 
-# Puerto
-EXPOSE 8000
-
-# Comando de inicio con ruta completa
-CMD ["/usr/local/bin/python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Comando de inicio con variable PORT de Railway
+CMD /usr/local/bin/python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
