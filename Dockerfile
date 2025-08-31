@@ -1,60 +1,95 @@
-FROM python:3.12-slim
+# Build stage
+FROM python:3.12-slim AS builder
 
-# Variables de entorno
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive \
-    CHROME_BIN=/usr/bin/google-chrome-stable \
-    CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
-
-# Instalar dependencias del sistema y Chrome con ChromeDriver
+# Install system dependencies for Chrome and Selenium
 RUN apt-get update && apt-get install -y \
-    wget curl unzip gnupg ca-certificates \
-    fonts-liberation libasound2 libatk-bridge2.0-0 libatk1.0-0 \
-    libatspi2.0-0 libdrm2 libgtk-3-0 libnspr4 libnss3 \
-    libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-    libxss1 libxtst6 xdg-utils \
-    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor > /etc/apt/trusted.gpg.d/google-chrome.gpg \
+    wget \
+    gnupg \
+    unzip \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Google Chrome
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
-    && CHROME_VERSION=$(google-chrome --version | cut -d ' ' -f3 | cut -d '.' -f1-3) \
-    && echo "Chrome version: $CHROME_VERSION" \
-    && wget -q "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}.0/linux64/chromedriver-linux64.zip" -O /tmp/chromedriver.zip \
-    && unzip /tmp/chromedriver.zip -d /tmp/ \
-    && mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/ \
-    && chmod +x /usr/local/bin/chromedriver \
-    && rm -rf /tmp/chromedriver* \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && rm -rf /var/lib/apt/lists/*
 
-# Directorio de trabajo
+# Poetry configuration
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=true \
+    POETRY_VIRTUALENVS_IN_PROJECT=true \
+    PIP_NO_CACHE_DIR=1
+
 WORKDIR /app
 
-# Copiar requirements primero (para mejor cache de Docker)
-COPY requirements.txt* ./
+# Install Poetry
+RUN pip install poetry==2.1.3
 
-# Instalar dependencias Python
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir \
-    fastapi==0.115.0 \
-    uvicorn[standard]==0.30.6 \
-    selenium==4.25.0 \
-    pillow==10.4.0 \
-    python-multipart==0.0.9
+# Copy dependency files
+COPY pyproject.toml poetry.lock* ./
 
-# Copiar el resto del código
+# Install dependencies
+RUN poetry install --no-root --no-dev
+
+# Copy application code
 COPY . .
 
-# Verificar instalación (esto aparecerá en los logs de build)
-RUN echo "=== Verification ===" \
-    && google-chrome --version \
-    && chromedriver --version \
-    && python --version \
-    && echo "=== Ready ==="
+# Deploy stage
+FROM python:3.12-slim
 
-# Puerto dinámico de Railway
-EXPOSE $PORT
+# Install runtime dependencies for Chrome
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    unzip \
+    ca-certificates \
+    curl \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libatspi2.0-0 \
+    libdrm2 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libxss1 \
+    libxtst6 \
+    xdg-utils \
 
-# Comando de inicio
-CMD ["python", "main.py"]
+# Instalar Chrome usando método nuevo
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor > /etc/apt/trusted.gpg.d/google-chrome.gpg \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable
+
+# Limpiar cache
+RUN rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN adduser --disabled-password --gecos "" myuser
+
+WORKDIR /app
+
+# Copy application from builder
+COPY --from=builder --chown=myuser:myuser /app /app
+
+# Switch to non-root user
+USER myuser
+
+# Environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPYCACHEPREFIX=/tmp \
+    CHROME_BIN=/usr/bin/google-chrome
+
+# Expose port
+EXPOSE 8000
+
+# Run application
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "${PORT:-8000}"]

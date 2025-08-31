@@ -1,7 +1,7 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -26,20 +26,6 @@ async def lifespan(app: FastAPI):
         # Verify critical dependencies on startup
         from services.squoosh_service import SquooshService
         logger.info("✅ Services loaded correctly")
-
-        # Log Chrome and ChromeDriver versions
-        import subprocess
-        try:
-            chrome_version = subprocess.check_output(["/usr/bin/google-chrome-stable", "--version"],
-                                                     text=True).strip()
-            logger.info(f"🌐 Chrome version: {chrome_version}")
-
-            chromedriver_version = subprocess.check_output(["/usr/local/bin/chromedriver", "--version"],
-                                                           text=True).strip()
-            logger.info(f"🚗 ChromeDriver version: {chromedriver_version}")
-        except Exception as e:
-            logger.warning(f"⚠️ Could not verify Chrome/ChromeDriver versions: {e}")
-
     except Exception as e:
         logger.error(f"❌ Error loading services: {e}")
         raise e
@@ -93,19 +79,3 @@ def create_app() -> FastAPI:
 
 # Create application instance
 app = create_app()
-
-if __name__ == "__main__":
-    import uvicorn
-
-    # Usar puerto dinámico de Railway o 8000 por defecto
-    port = int(os.environ.get("PORT", 8000))
-
-    logger.info(f"🌐 Starting server on 0.0.0.0:{port}")
-
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=False,
-        log_level="info"
-    )

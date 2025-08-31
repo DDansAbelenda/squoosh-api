@@ -27,55 +27,48 @@ async def compress_image_base64(request: CompressionRequest):
     - **quality**: Compression quality (1-100)
     - **filename**: Original filename (optional)
     """
-    squoosh = None
     try:
         logger.info(f"Starting compression - Format: {request.format}, Quality: {request.quality}")
 
         # Decode base64
         try:
             image_bytes = base64.b64decode(request.image_base64)
-            logger.info(f"Base64 decoded successfully, size: {len(image_bytes)} bytes")
         except Exception as e:
             raise HTTPException(
                 status_code=400,
                 detail=f"Error decoding base64: {str(e)}"
             )
 
-        # Create SquooshService instance
-        squoosh = SquooshService()
-
-        # Create driver
-        squoosh.create_driver()
-
         # Compress image
-        compressed_bytes = squoosh.compress_image_from_bytes(
-            image_bytes=image_bytes,
-            format_type=request.format.value,
-            quality=request.quality,
-            original_filename=request.filename or "image.jpg"
-        )
-
-        if not compressed_bytes:
-            raise HTTPException(
-                status_code=500,
-                detail="Error during image compression"
+        with SquooshService(headless=True) as squoosh:
+            compressed_bytes = squoosh.compress_image_from_bytes(
+                image_bytes=image_bytes,
+                format_type=request.format.value,
+                quality=request.quality,
+                original_filename=request.filename or "image.jpg"
             )
 
-        # Calculate statistics
-        stats = squoosh.get_compression_stats(image_bytes, compressed_bytes)
+            if not compressed_bytes:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Error during image compression"
+                )
 
-        # Encode result to base64
-        compressed_base64 = base64.b64encode(compressed_bytes).decode('utf-8')
+            # Calculate statistics
+            stats = squoosh.get_compression_stats(image_bytes, compressed_bytes)
 
-        logger.info(f"Compression successful - Reduction: {stats['reduction_percent']}%")
+            # Encode result to base64
+            compressed_base64 = base64.b64encode(compressed_bytes).decode('utf-8')
 
-        return CompressionResponse(
-            compressed_image_base64=compressed_base64,
-            format=request.format.value,
-            quality=request.quality,
-            stats=stats,
-            filename=request.filename or "image.jpg"
-        )
+            logger.info(f"Compression successful - Reduction: {stats['reduction_percent']}%")
+
+            return CompressionResponse(
+                compressed_image_base64=compressed_base64,
+                format=request.format.value,
+                quality=request.quality,
+                stats=stats,
+                filename=request.filename or "image.jpg"
+            )
 
     except HTTPException:
         raise
@@ -85,13 +78,6 @@ async def compress_image_base64(request: CompressionRequest):
             status_code=500,
             detail=f"Internal server error: {str(e)}"
         )
-    finally:
-        # Always clean up
-        if squoosh:
-            try:
-                squoosh.close()
-            except Exception as e:
-                logger.warning(f"Error cleaning up SquooshService: {e}")
 
 
 @router.post("/upload", response_model=CompressionResponse)
@@ -107,7 +93,6 @@ async def compress_image_upload(
     - **format**: Output format
     - **quality**: Compression quality (1-100)
     """
-    squoosh = None
     try:
         # Validate file type
         if not file.content_type or not file.content_type.startswith('image/'):
@@ -127,41 +112,36 @@ async def compress_image_upload(
                 detail="File is empty"
             )
 
-        # Create SquooshService instance
-        squoosh = SquooshService()
-
-        # Create driver
-        squoosh.create_driver()
-
         # Compress image
-        compressed_bytes = squoosh.compress_image_from_bytes(
-            image_bytes=image_bytes,
-            format_type=format.value,
-            quality=quality,
-            original_filename=file.filename or "image.jpg"
-        )
-
-        if not compressed_bytes:
-            raise HTTPException(
-                status_code=500,
-                detail="Error during image compression"
+        with SquooshService(headless=True) as squoosh:
+            compressed_bytes = squoosh.compress_image_from_bytes(
+                image_bytes=image_bytes,
+                format_type=format.value,
+                quality=quality,
+                original_filename=file.filename or "image.jpg"
             )
 
-        # Calculate statistics
-        stats = squoosh.get_compression_stats(image_bytes, compressed_bytes)
+            if not compressed_bytes:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Error during image compression"
+                )
 
-        # Encode result to base64
-        compressed_base64 = base64.b64encode(compressed_bytes).decode('utf-8')
+            # Calculate statistics
+            stats = squoosh.get_compression_stats(image_bytes, compressed_bytes)
 
-        logger.info(f"Upload compressed successfully - Reduction: {stats['reduction_percent']}%")
+            # Encode result to base64
+            compressed_base64 = base64.b64encode(compressed_bytes).decode('utf-8')
 
-        return CompressionResponse(
-            compressed_image_base64=compressed_base64,
-            format=format.value,
-            quality=quality,
-            stats=stats,
-            filename=file.filename or "image.jpg"
-        )
+            logger.info(f"Upload compressed successfully - Reduction: {stats['reduction_percent']}%")
+
+            return CompressionResponse(
+                compressed_image_base64=compressed_base64,
+                format=format.value,
+                quality=quality,
+                stats=stats,
+                filename=file.filename or "image.jpg"
+            )
 
     except HTTPException:
         raise
@@ -171,13 +151,6 @@ async def compress_image_upload(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
         )
-    finally:
-        # Always clean up
-        if squoosh:
-            try:
-                squoosh.close()
-            except Exception as e:
-                logger.warning(f"Error cleaning up SquooshService: {e}")
 
 
 @router.get("/formats", response_model=SupportedFormatsResponse)

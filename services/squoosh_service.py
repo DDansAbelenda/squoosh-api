@@ -1,116 +1,78 @@
-# services/squoosh_service.py - Versión corregida compatible
 import os
 import time
 import tempfile
-import logging
 from typing import Optional
 from io import BytesIO
 from PIL import Image
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import TimeoutException
-
-logger = logging.getLogger(__name__)
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service
 
 
 class SquooshService:
-    """Service for compressing images using Squoosh"""
+    """Service for compressing images using Squoosh without permanent filesystem usage"""
 
-    def __init__(self):
-        """Initialize service without parameters"""
+    def __init__(self, headless: bool = True):
+        self.headless = headless
         self.driver = None
         self.wait = None
+        self.temp_dir = None
+
+    def __enter__(self):
+        self._setup_driver()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def _setup_driver(self):
+        """Configure Chrome driver for Docker/Linux environment"""
+        chrome_options = Options()
+
+        if self.headless:
+            chrome_options.add_argument("--headless")
+
+        # Specific options for Docker/Linux
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-background-timer-throttling")
+        chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+        chrome_options.add_argument("--disable-renderer-backgrounding")
+        chrome_options.add_argument("--disable-features=TranslateUI")
+        chrome_options.add_argument("--disable-ipc-flooding-protection")
+        chrome_options.add_argument("--window-size=1920,1080")
+
+        # Create temporary directory
         self.temp_dir = tempfile.mkdtemp()
-        logger.info(f"Temporary directory created: {self.temp_dir}")
 
-    def _get_chrome_options(self):
-        """Configurar opciones de Chrome para Railway"""
-        options = Options()
-
-        # Opciones esenciales para headless
-        options.add_argument('--headless=new')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--disable-gpu')
-        options.add_argument('--disable-web-security')
-        options.add_argument('--disable-features=VizDisplayCompositor')
-
-        # Optimizaciones de memoria y rendimiento
-        options.add_argument('--memory-pressure-off')
-        options.add_argument('--max_old_space_size=4096')
-        options.add_argument('--disable-background-timer-throttling')
-        options.add_argument('--disable-backgrounding-occluded-windows')
-        options.add_argument('--disable-renderer-backgrounding')
-        options.add_argument('--disable-extensions')
-        options.add_argument('--disable-plugins')
-        options.add_argument('--disable-images')
-        options.add_argument('--disable-javascript')
-
-        # Configuraciones de descarga
+        # Configure temporary download directory
         prefs = {
             "download.default_directory": self.temp_dir,
             "download.prompt_for_download": False,
             "download.directory_upgrade": True,
-            "safebrowsing.enabled": False
+            "safebrowsing.enabled": True
         }
-        options.add_experimental_option("prefs", prefs)
+        chrome_options.add_experimental_option("prefs", prefs)
 
-        # Configurar user agent
-        options.add_argument('--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')
-
-        # Tamaño de ventana
-        options.add_argument('--window-size=1920,1080')
-
-        # Configurar binario de Chrome
-        chrome_bin = os.environ.get('CHROME_BIN', '/usr/bin/google-chrome-stable')
-        if os.path.exists(chrome_bin):
-            options.binary_location = chrome_bin
-            logger.info(f"Using Chrome binary: {chrome_bin}")
-
-        return options
-
-    def _get_chrome_service(self):
-        """Configurar servicio de ChromeDriver"""
-        chromedriver_path = os.environ.get('CHROMEDRIVER_PATH', '/usr/local/bin/chromedriver')
-
-        if os.path.exists(chromedriver_path):
-            logger.info(f"Using ChromeDriver at: {chromedriver_path}")
-            return Service(chromedriver_path)
-        else:
-            # Fallback a WebDriver Manager
-            logger.warning("ChromeDriver not found, falling back to WebDriver Manager")
-            try:
-                from webdriver_manager.chrome import ChromeDriverManager
-                driver_path = ChromeDriverManager().install()
-                logger.info(f"WebDriver Manager installed ChromeDriver at: {driver_path}")
-                return Service(driver_path)
-            except Exception as e:
-                logger.error(f"WebDriver Manager failed: {e}")
-                raise Exception(f"Could not configure ChromeDriver: {e}")
-
-    def create_driver(self):
-        """Crear instancia de WebDriver"""
-        if self.driver:
-            return self.driver
-
+        # Configure driver
         try:
-            options = self._get_chrome_options()
-            service = self._get_chrome_service()
+            # In Docker, use system Chrome binary
+            if os.getenv("CHROME_BIN"):
+                chrome_options.binary_location = os.getenv("CHROME_BIN")
 
-            logger.info("Creating Chrome WebDriver...")
-            self.driver = webdriver.Chrome(service=service, options=options)
+            service = Service(ChromeDriverManager().install())
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
             self.wait = WebDriverWait(self.driver, 30)
 
-            logger.info("✅ Chrome WebDriver created successfully")
-            return self.driver
-
         except Exception as e:
-            logger.error(f"❌ Error creating Chrome driver: {e}")
             raise Exception(f"Error configuring Chrome driver: {e}")
 
     def compress_image_from_bytes(
@@ -135,10 +97,6 @@ class SquooshService:
         temp_input_path = None
 
         try:
-            # Create driver if not exists
-            if not self.driver:
-                self.create_driver()
-
             # Validate image
             try:
                 img = Image.open(BytesIO(image_bytes))
@@ -148,7 +106,7 @@ class SquooshService:
 
             # Create temporary input file
             file_ext = self._get_file_extension(original_filename)
-            temp_input_path = os.path.join(self.temp_dir, f"input_{int(time.time())}{file_ext}")
+            temp_input_path = os.path.join(self.temp_dir, f"input{file_ext}")
 
             with open(temp_input_path, 'wb') as f:
                 f.write(image_bytes)
@@ -178,35 +136,27 @@ class SquooshService:
         """Compress image using Squoosh web app"""
         try:
             # Navigate to Squoosh
-            logger.info("Loading Squoosh.app...")
             self.driver.get("https://squoosh.app/editor")
-            time.sleep(5)
+            time.sleep(3)
 
             # Upload image
-            logger.info("Uploading image...")
-            file_input = self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']"))
-            )
+            file_input = self.driver.find_element(By.CSS_SELECTOR, "input[type='file']")
             file_input.send_keys(os.path.abspath(image_path))
 
-            # Wait for image to load
-            logger.info("Waiting for image processing...")
+            # Wait for results to appear
             self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "canvas"))
+                EC.presence_of_element_located((By.CSS_SELECTOR, "._results_17s86_26"))
             )
             time.sleep(3)
 
             # Configure format and quality
-            logger.info(f"Setting format: {format_type}, quality: {quality}")
             self._set_format(format_type, quality)
             time.sleep(3)
 
             # Download processed image
-            logger.info("Downloading compressed image...")
             return self._download_compressed()
 
         except Exception as e:
-            logger.error(f"Error in Squoosh processing: {e}")
             raise Exception(f"Error in Squoosh: {e}")
 
     def _set_format(self, format_type: str, quality: int):
@@ -226,35 +176,31 @@ class SquooshService:
             }
 
             format_value = format_map.get(format_type.lower(), "webP")
-            logger.info(f"Setting format to: {format_value}")
 
-            # Find and change format
+            # Change format
             format_select = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "select"))
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "select._builtin-select_1onzk_5"))
             )
 
             self.driver.execute_script(f"arguments[0].value = '{format_value}'", format_select)
             self.driver.execute_script("arguments[0].dispatchEvent(new Event('change'))", format_select)
-            time.sleep(2)
+            time.sleep(3)
 
             # Adjust quality if available
-            if format_type.lower() in ['webp', 'mozjpeg', 'jpg', 'jpeg', 'avif']:
-                try:
-                    quality_input = self.wait.until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='range']"))
-                    )
+            try:
+                quality_input = self.wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='range'][name='quality']"))
+                )
 
-                    self.driver.execute_script(f"arguments[0].value = {quality}", quality_input)
-                    self.driver.execute_script("arguments[0].dispatchEvent(new Event('input'))", quality_input)
-                    self.driver.execute_script("arguments[0].dispatchEvent(new Event('change'))", quality_input)
-                    logger.info(f"Quality set to: {quality}")
-                    time.sleep(2)
+                self.driver.execute_script(f"arguments[0].value = {quality}", quality_input)
+                self.driver.execute_script("arguments[0].dispatchEvent(new Event('input'))", quality_input)
+                self.driver.execute_script("arguments[0].dispatchEvent(new Event('change'))", quality_input)
+                time.sleep(2)
 
-                except TimeoutException:
-                    logger.warning(f"Quality control not available for format: {format_type}")
+            except TimeoutException:
+                pass  # Quality control not available for this format
 
         except Exception as e:
-            logger.error(f"Error setting format: {e}")
             raise Exception(f"Error configuring format: {e}")
 
     def _download_compressed(self) -> Optional[str]:
@@ -265,75 +211,57 @@ class SquooshService:
 
             # Search for enabled download link
             download_link = None
-            max_attempts = 30
+            max_attempts = 20
 
-            for attempt in range(max_attempts):
+            for _ in range(max_attempts):
                 try:
                     download_links = self.driver.find_elements(By.CSS_SELECTOR, "a[download]")
-                    logger.info(f"Found {len(download_links)} download links on attempt {attempt + 1}")
 
-                    for i, link in enumerate(download_links):
-                        try:
-                            classes = link.get_attribute('class') or ''
-                            download_name = link.get_attribute('download') or ''
+                    for link in download_links:
+                        classes = link.get_attribute('class') or ''
+                        download_name = link.get_attribute('download') or ''
 
-                            logger.info(
-                                f"Link {i}: classes='{classes}', download='{download_name}', enabled={link.is_enabled()}")
-
-                            # Search for enabled link
-                            if (link.is_enabled() and
-                                    link.is_displayed() and
-                                    download_name and
-                                    'disable' not in classes.lower()):
-                                download_link = link
-                                logger.info(f"Found valid download link: {download_name}")
-                                break
-
-                        except Exception as e:
-                            logger.warning(f"Error checking link {i}: {e}")
+                        # Search for link that is not disabled and not the original image
+                        if ('_download-disable_' not in classes and
+                                download_name and
+                                link.is_enabled() and
+                                link.is_displayed()):
+                            download_link = link
+                            break
 
                     if download_link:
                         break
 
-                    time.sleep(1)
+                    time.sleep(2)
 
-                except Exception as e:
-                    logger.warning(f"Error finding download links on attempt {attempt + 1}: {e}")
-                    time.sleep(1)
+                except Exception:
+                    time.sleep(2)
 
             if not download_link:
-                raise Exception("No enabled download button found after all attempts")
+                raise Exception("No enabled download button found")
 
-            # Click download
+            # Scroll and click
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", download_link)
+            time.sleep(1)
+
             try:
-                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", download_link)
-                time.sleep(1)
+                download_link.click()
+            except Exception:
                 self.driver.execute_script("arguments[0].click();", download_link)
-                logger.info("Download link clicked")
-            except Exception as e:
-                logger.error(f"Error clicking download: {e}")
-                raise
 
             # Wait for download
-            logger.info("Waiting for file download...")
-            for attempt in range(30):
+            for _ in range(30):
                 time.sleep(1)
-                try:
-                    files_after = set(os.listdir(self.temp_dir))
-                    new_files = files_after - files_before
+                files_after = set(os.listdir(self.temp_dir))
+                new_files = files_after - files_before
 
-                    if new_files:
-                        downloaded_file = os.path.join(self.temp_dir, list(new_files)[0])
-                        logger.info(f"File downloaded: {downloaded_file}")
-                        return downloaded_file
-
-                except Exception as e:
-                    logger.warning(f"Error checking downloads on attempt {attempt + 1}: {e}")
+                if new_files:
+                    downloaded_file = os.path.join(self.temp_dir, list(new_files)[0])
+                    return downloaded_file
 
             raise Exception("Timeout waiting for download")
 
         except Exception as e:
-            logger.error(f"Error in download process: {e}")
             raise Exception(f"Error downloading: {e}")
 
     def _get_file_extension(self, filename: str) -> str:
@@ -347,34 +275,24 @@ class SquooshService:
             try:
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                    logger.debug(f"Cleaned up temp file: {file_path}")
-            except Exception as e:
-                logger.warning(f"Could not clean up {file_path}: {e}")
+            except Exception:
+                pass
 
-    def close_driver(self):
-        """Cerrar WebDriver si existe"""
+    def close(self):
+        """Close resources"""
         if self.driver:
             try:
                 self.driver.quit()
-                logger.info("✅ Chrome WebDriver closed")
-            except Exception as e:
-                logger.warning(f"Warning closing driver: {e}")
-            finally:
-                self.driver = None
-                self.wait = None
-
-    def close(self):
-        """Close all resources"""
-        self.close_driver()
+            except Exception:
+                pass
 
         # Clean up temporary directory
-        if hasattr(self, 'temp_dir') and self.temp_dir and os.path.exists(self.temp_dir):
+        if self.temp_dir and os.path.exists(self.temp_dir):
             try:
                 import shutil
                 shutil.rmtree(self.temp_dir)
-                logger.info(f"Cleaned up temp directory: {self.temp_dir}")
-            except Exception as e:
-                logger.warning(f"Could not clean up temp directory: {e}")
+            except:
+                pass
 
     def get_compression_stats(self, original_bytes: bytes, compressed_bytes: bytes) -> dict:
         """Calculate compression statistics"""
