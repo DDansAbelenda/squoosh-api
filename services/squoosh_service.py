@@ -56,7 +56,15 @@ class SquooshService:
             chrome_options.add_argument("--memory-pressure-off")
             chrome_options.add_argument("--disable-web-security")
             chrome_options.add_argument("--disable-features=VizDisplayCompositor")
-            chrome_options.add_argument("--single-process")
+            chrome_options.add_argument("--remote-debugging-port=9222")
+            chrome_options.add_argument("--disable-crash-reporter")
+            chrome_options.add_argument("--disable-in-process-stack-traces")
+            chrome_options.add_argument("--disable-logging")
+            chrome_options.add_argument("--disable-dev-tools")
+            chrome_options.add_argument("--disable-hang-monitor")
+            chrome_options.add_argument("--no-first-run")
+            chrome_options.add_argument("--no-default-browser-check")
+            chrome_options.add_argument("--disable-background-mode")
 
         # Create temporary directory
         self.temp_dir = tempfile.mkdtemp()

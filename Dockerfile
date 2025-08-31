@@ -77,7 +77,8 @@ USER appuser
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     CHROME_BIN=/usr/bin/google-chrome \
-    CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
+    CHROMEDRIVER_PATH=/usr/local/bin/chromedriver \
+    DISPLAY=:99
 
-# Comando de inicio con variable PORT de Railway
-CMD /usr/local/bin/python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Comando de inicio con variable PORT de Railway y opciones de memoria
+CMD /usr/local/bin/python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1
