@@ -1,10 +1,12 @@
-# Dockerfile simplificado para Railway
+# Dockerfile optimizado para Railway con Selenium/Chrome
 FROM python:3.12-slim
 
 # Variables de entorno
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    CHROME_BIN=/usr/bin/google-chrome-stable \
+    DISPLAY=:99
 
 # Instalar dependencias del sistema y Chrome en una sola capa
 RUN apt-get update && apt-get install -y \
@@ -17,13 +19,14 @@ RUN apt-get update && apt-get install -y \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Directorio de trabajo
 WORKDIR /app
 
-# Copiar archivos
-COPY . .
+# Copiar requirements primero (para cache de Docker)
+COPY requirements.txt* ./
 
 # Instalar dependencias Python
 RUN pip install --no-cache-dir --upgrade pip \
@@ -35,8 +38,11 @@ RUN pip install --no-cache-dir --upgrade pip \
     pillow==10.4.0 \
     python-multipart==0.0.9
 
-# Exponer puerto
+# Copiar el resto del código
+COPY . .
+
+# Exponer puerto (Railway usa PORT dinámico)
 EXPOSE 8000
 
-# Comando de inicio simple
-CMD python main.py
+# Railway manejará el inicio con startCommand
+CMD ["python", "main.py"]
