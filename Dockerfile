@@ -1,28 +1,28 @@
-# Dockerfile para Railway - Sin Chrome
+# Dockerfile for Railway - Without Chrome
 FROM python:3.12-slim
 
-# Evitar prompts interactivos
+# Avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Instalar dependencias básicas del sistema
+# Install basic system dependencies
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Crear usuario antes de crear el directorio de trabajo
+# Create user before creating work directory
 RUN adduser --disabled-password --gecos "" appuser
 
-# Directorio de trabajo
+# Work directory
 WORKDIR /app
 
-# Cambiar ownership del directorio
+# Change ownership of directory
 RUN chown -R appuser:appuser /app
 
-# Copiar requirements como root primero
+# Copy requirements as root first
 COPY requirements.txt* ./
 
-# Instalar dependencias Python (sin selenium ni webdriver-manager)
+# Install Python dependencies (without selenium or webdriver-manager)
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \
     fastapi==0.115.0 \
@@ -30,16 +30,16 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pillow==10.4.0 \
     python-multipart==0.0.9
 
-# Copiar código y cambiar ownership
+# Copy code and change ownership
 COPY . .
 RUN chown -R appuser:appuser /app
 
-# Cambiar a usuario no-root
+# Switch to non-root user
 USER appuser
 
-# Variables de entorno
+# Environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Comando de inicio con variable PORT de Railway y opciones de memoria
+# Start command with Railway PORT variable and memory options
 CMD /usr/local/bin/python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1

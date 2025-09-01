@@ -1,24 +1,32 @@
 #!/usr/bin/env python3
 """
-Script para ejecutar la API localmente
+Script to run the API locally
 """
 import os
+import logging
 import uvicorn
 from dotenv import load_dotenv
 
-# Cargar variables de entorno si existe archivo .env
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+# Load environment variables if .env file exists
 load_dotenv()
 
 if __name__ == "__main__":
-    # Configuración para desarrollo local
+    # Configuration for local development
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "8000"))
     debug = os.getenv("DEBUG", "true").lower() == "true"
-    
-    print(f"🚀 Iniciando Squoosh API en http://{host}:{port}")
-    print(f"📖 Documentación disponible en http://{host}:{port}/docs")
-    print(f"🔧 Modo debug: {debug}")
-    
+
+    logger.info(f"🚀 Starting Squoosh API on http://{host}:{port}")
+    logger.info(f"📖 Documentation available at http://{host}:{port}/docs")
+    logger.info(f"🔧 Debug mode: {debug}")
+
     uvicorn.run(
         "main:app",
         host=host,

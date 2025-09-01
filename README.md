@@ -1,86 +1,86 @@
 # Squoosh API
 
-API REST para compresión de imágenes usando Squoosh.app
+REST API for image compression using Squoosh.app
 
-## Características
+## Features
 
-- 🚀 **FastAPI** con documentación automática
-- 🖼️ **Compresión de imágenes** usando Squoosh.app
-- 📦 **Soporte múltiples formatos**: WebP, MozJPEG, AVIF, OxiPNG
-- 🐋 **Docker ready** para despliegue en cualquier entorno
-- 🔄 **Sin filesystem**: Procesa imágenes en memoria
-- 📊 **Estadísticas** de compresión detalladas
+- 🚀 **FastAPI** with automatic documentation
+- 🖼️ **Image compression** using Squoosh.app
+- 📦 **Multiple format support**: WebP, MozJPEG, AVIF, OxiPNG
+- 🐋 **Docker ready** for deployment in any environment
+- 🔄 **No filesystem**: Processes images in memory
+- 📊 **Detailed compression statistics**
 
-## Estructura del Proyecto
+## Project Structure
 
 ```
 squoosh-api/
-├── main.py                 # Aplicación FastAPI principal
-├── run_local.py           # Script para ejecutar localmente
-├── pyproject.toml         # Dependencias Poetry
-├── Dockerfile             # Configuración Docker
-├── .env.example           # Variables de entorno ejemplo
+├── main.py                 # Main FastAPI application
+├── run_local.py           # Script to run locally
+├── pyproject.toml         # Poetry dependencies
+├── Dockerfile             # Docker configuration
+├── .env.example           # Environment variables example
 ├── models/
-│   └── schemas.py         # Modelos Pydantic
+│   └── schemas.py         # Pydantic models
 ├── routes/
-│   ├── compression.py     # Endpoints de compresión
+│   ├── compression.py     # Compression endpoints
 │   └── health.py         # Health checks
 └── services/
-    └── squoosh_service.py # Lógica de compresión
+    └── squoosh_service.py # Compression logic
 ```
 
-## Instalación Local
+## Local Installation
 
-### Prerequisitos
+### Prerequisites
 - Python 3.12+
-- Google Chrome instalado
-- Poetry (opcional)
+- Google Chrome installed
+- Poetry (optional)
 
-### Usando Poetry
+### Using Poetry
 ```bash
-# Clonar e instalar dependencias
-git clone <tu-repo>
+# Clone and install dependencies
+git clone <your-repo>
 cd squoosh-api
 poetry install
 
-# Ejecutar
+# Run
 poetry run python run_local.py
 ```
 
-### Usando pip
+### Using pip
 ```bash
-# Crear entorno virtual
+# Create virtual environment
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
 # venv\Scripts\activate   # Windows
 
-# Instalar dependencias
+# Install dependencies
 pip install fastapi uvicorn selenium webdriver-manager pillow python-multipart
 
-# Ejecutar
+# Run
 python run_local.py
 ```
 
-## Instalación con Docker
+## Docker Installation
 
 ```bash
-# Construir imagen
+# Build image
 docker build -t squoosh-api .
 
-# Ejecutar contenedor
+# Run container
 docker run -p 8000:8000 squoosh-api
 ```
 
-## Uso de la API
+## API Usage
 
-### Documentación Interactiva
-Una vez ejecutándose, visita:
+### Interactive Documentation
+Once running, visit:
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 
-### Endpoints Principales
+### Main Endpoints
 
-#### 1. Comprimir desde Base64
+#### 1. Compress from Base64
 ```bash
 POST /compress/base64
 ```
@@ -91,7 +91,7 @@ POST /compress/base64
   "image_base64": "iVBORw0KGgoAAAANSUhEUgAA...",
   "format": "webp",
   "quality": 80,
-  "filename": "mi_imagen.jpg"
+  "filename": "my_image.jpg"
 }
 ```
 
@@ -108,21 +108,21 @@ POST /compress/base64
     "reduction_percent": 63.6,
     "compression_ratio": 2.75
   },
-  "filename": "mi_imagen.jpg"
+  "filename": "my_image.jpg"
 }
 ```
 
-#### 2. Comprimir desde Upload
+#### 2. Compress from Upload
 ```bash
 POST /compress/upload
 ```
 
 **Form Data:**
-- `file`: Archivo de imagen
-- `format`: Formato de salida (webp, mozjpeg, avif, oxipng)
-- `quality`: Calidad 1-100
+- `file`: Image file
+- `format`: Output format (webp, mozjpeg, avif, oxipng)
+- `quality`: Quality 1-100
 
-#### 3. Formatos Soportados
+#### 3. Supported Formats
 ```bash
 GET /compress/formats
 ```
@@ -132,105 +132,105 @@ GET /compress/formats
 GET /health
 ```
 
-### Ejemplo con curl
+### Example with curl
 
 ```bash
-# Comprimir imagen desde base64
+# Compress image from base64
 curl -X POST "http://localhost:8000/compress/base64" \
   -H "Content-Type: application/json" \
   -d '{
-    "image_base64": "'$(base64 -i mi_imagen.jpg)'",
+    "image_base64": "'$(base64 -i my_image.jpg)'",
     "format": "webp",
     "quality": 80,
-    "filename": "mi_imagen.jpg"
+    "filename": "my_image.jpg"
   }'
 
-# Upload directo
+# Direct upload
 curl -X POST "http://localhost:8000/compress/upload" \
-  -F "file=@mi_imagen.jpg" \
+  -F "file=@my_image.jpg" \
   -F "format=webp" \
   -F "quality=80"
 ```
 
-### Ejemplo con Python
+### Example with Python
 
 ```python
 import requests
 import base64
 
-# Leer imagen
-with open("mi_imagen.jpg", "rb") as f:
+# Read image
+with open("my_image.jpg", "rb") as f:
     image_bytes = f.read()
     image_base64 = base64.b64encode(image_bytes).decode('utf-8')
 
-# Comprimir
+# Compress
 response = requests.post(
     "http://localhost:8000/compress/base64",
     json={
         "image_base64": image_base64,
         "format": "webp",
         "quality": 80,
-        "filename": "mi_imagen.jpg"
+        "filename": "my_image.jpg"
     }
 )
 
 if response.status_code == 200:
     result = response.json()
     
-    # Guardar imagen comprimida
+    # Save compressed image
     compressed_bytes = base64.b64decode(result["compressed_image_base64"])
-    with open("imagen_comprimida.webp", "wb") as f:
+    with open("compressed_image.webp", "wb") as f:
         f.write(compressed_bytes)
     
-    print(f"✅ Compresión exitosa!")
-    print(f"📉 Reducción: {result['stats']['reduction_percent']}%")
+    print(f"✅ Compression successful!")
+    print(f"📉 Reduction: {result['stats']['reduction_percent']}%")
 else:
     print(f"❌ Error: {response.text}")
 ```
 
-## Formatos Soportados
+## Supported Formats
 
-| Formato  | Descripción | Uso Recomendado |
+| Format  | Description | Recommended Use |
 |----------|-------------|-----------------|
-| `webp` | WebP | Excelente balance calidad/tamaño |
-| `mozjpeg` | MozJPEG | Mejor para fotografías |
-| `avif` | AVIF | Máxima compresión (más lento) |
-| `oxipng` | OxiPNG | PNG optimizado sin pérdida |
+| `webp` | WebP | Excellent balance quality/size |
+| `mozjpeg` | MozJPEG | Best for photographs |
+| `avif` | AVIF | Maximum compression (slower) |
+| `oxipng` | OxiPNG | Optimized PNG without loss |
 
-## Variables de Entorno
+## Environment Variables
 
-- `HOST`: Host de la aplicación (default: 127.0.0.1)
-- `PORT`: Puerto de la aplicación (default: 8000)
-- `DEBUG`: Modo debug (default: true)
-- `CHROME_BIN`: Ruta del binario de Chrome (para Docker)
+- `HOST`: Application host (default: 127.0.0.1)
+- `PORT`: Application port (default: 8000)
+- `DEBUG`: Debug mode (default: true)
+- `CHROME_BIN`: Chrome binary path (for Docker)
 
-## Solución de Problemas
+## Troubleshooting
 
-### Chrome no encontrado
+### Chrome not found
 ```bash
 # Ubuntu/Debian
 sudo apt-get update
 sudo apt-get install google-chrome-stable
 
-# Verificar instalación
+# Verify installation
 google-chrome --version
 ```
 
-### Errores de permisos en Docker
-Asegúrate de que el usuario tiene permisos para ejecutar Chrome:
+### Docker permission errors
+Make sure the user has permissions to run Chrome:
 ```dockerfile
 USER myuser
 ```
 
-### Timeouts en producción
-Aumenta los timeouts en `squoosh_service.py` si es necesario:
+### Production timeouts
+Increase timeouts in `squoosh_service.py` if needed:
 ```python
-self.wait = WebDriverWait(self.driver, 60)  # Aumentar de 30 a 60
+self.wait = WebDriverWait(self.driver, 60)  # Increase from 30 to 60
 ```
 
-## Desarrollo
+## Development
 
-### Ejecutar tests
+### Run tests
 ```bash
 poetry run pytest
 ```
@@ -241,7 +241,7 @@ poetry run black .
 poetry run isort .
 ```
 
-## Despliegue
+## Deployment
 
 ### Docker Compose
 ```yaml
@@ -256,24 +256,24 @@ services:
       - DEBUG=false
 ```
 
-### Variables de entorno en producción
+### Production environment variables
 ```bash
 export PORT=8000
 export DEBUG=false
 export CHROME_BIN=/usr/bin/google-chrome
 ```
 
-## Limitaciones
+## Limitations
 
-- Requiere Google Chrome instalado
-- Depende de squoosh.app (servicio externo)
-- Procesamiento secuencial (una imagen a la vez)
-- Timeouts configurables según entorno
+- Requires Google Chrome installed
+- Depends on squoosh.app (external service)
+- Sequential processing (one image at a time)
+- Configurable timeouts per environment
 
-## Contribuir
+## Contributing
 
-1. Fork el proyecto
-2. Crear rama feature (`git checkout -b feature/nueva-funcionalidad`)
-3. Commit cambios (`git commit -am 'Agregar nueva funcionalidad'`)
-4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
-5. Crear Pull Request
+1. Fork the project
+2. Create feature branch (`git checkout -b feature/new-functionality`)
+3. Commit changes (`git commit -am 'Add new functionality'`)
+4. Push to branch (`git push origin feature/new-functionality`)
+5. Create Pull Request

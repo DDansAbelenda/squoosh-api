@@ -6,6 +6,7 @@ from models.schemas import (
     CompressionRequest,
     CompressionResponse,
     CompressionFormat,
+    CompressionStats,
     SupportedFormatsResponse
 )
 from services.squoosh_service import SquooshService
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/compress", tags=["compression"])
 
+IMAGE_DEFAULT_NAME = "image.jpg"
 
 @router.post("/base64", response_model=CompressionResponse)
 async def compress_image_base64(request: CompressionRequest):
@@ -40,12 +42,12 @@ async def compress_image_base64(request: CompressionRequest):
             )
 
         # Compress image
-        with SquooshService(headless=True) as squoosh:
+        with SquooshService() as squoosh:
             compressed_bytes = squoosh.compress_image_from_bytes(
                 image_bytes=image_bytes,
                 format_type=request.format.value,
                 quality=request.quality,
-                original_filename=request.filename or "image.jpg"
+                original_filename=request.filename or IMAGE_DEFAULT_NAME
             )
 
             if not compressed_bytes:
@@ -55,19 +57,20 @@ async def compress_image_base64(request: CompressionRequest):
                 )
 
             # Calculate statistics
-            stats = squoosh.get_compression_stats(image_bytes, compressed_bytes)
+            stats_dict = squoosh.get_compression_stats(image_bytes, compressed_bytes)
+            stats = CompressionStats(**stats_dict)
 
             # Encode result to base64
             compressed_base64 = base64.b64encode(compressed_bytes).decode('utf-8')
 
-            logger.info(f"Compression successful - Reduction: {stats['reduction_percent']}%")
+            logger.info(f"Compression successful - Reduction: {stats.reduction_percent}%")
 
             return CompressionResponse(
                 compressed_image_base64=compressed_base64,
                 format=request.format.value,
                 quality=request.quality,
                 stats=stats,
-                filename=request.filename or "image.jpg"
+                filename=request.filename or IMAGE_DEFAULT_NAME
             )
 
     except HTTPException:
@@ -83,7 +86,7 @@ async def compress_image_base64(request: CompressionRequest):
 @router.post("/upload", response_model=CompressionResponse)
 async def compress_image_upload(
         file: UploadFile = File(...),
-        format: CompressionFormat = Form(default=CompressionFormat.WEBP),
+        image_format: CompressionFormat = Form(default=CompressionFormat.WEBP),
         quality: int = Form(default=80, ge=1, le=100)
 ):
     """
@@ -101,7 +104,7 @@ async def compress_image_upload(
                 detail="File must be an image"
             )
 
-        logger.info(f"Processing upload - File: {file.filename}, Format: {format}, Quality: {quality}")
+        logger.info(f"Processing upload - File: {file.filename}, Format: {image_format}, Quality: {quality}")
 
         # Read file bytes
         image_bytes = await file.read()
@@ -113,12 +116,12 @@ async def compress_image_upload(
             )
 
         # Compress image
-        with SquooshService(headless=True) as squoosh:
+        with SquooshService() as squoosh:
             compressed_bytes = squoosh.compress_image_from_bytes(
                 image_bytes=image_bytes,
-                format_type=format.value,
+                format_type=image_format.value,
                 quality=quality,
-                original_filename=file.filename or "image.jpg"
+                original_filename=file.filename or IMAGE_DEFAULT_NAME
             )
 
             if not compressed_bytes:
@@ -128,16 +131,17 @@ async def compress_image_upload(
                 )
 
             # Calculate statistics
-            stats = squoosh.get_compression_stats(image_bytes, compressed_bytes)
+            stats_dict = squoosh.get_compression_stats(image_bytes, compressed_bytes)
+            stats = CompressionStats(**stats_dict)
 
             # Encode result to base64
             compressed_base64 = base64.b64encode(compressed_bytes).decode('utf-8')
 
-            logger.info(f"Upload compressed successfully - Reduction: {stats['reduction_percent']}%")
+            logger.info(f"Upload compressed successfully - Reduction: {stats.reduction_percent}%")
 
             return CompressionResponse(
                 compressed_image_base64=compressed_base64,
-                format=format.value,
+                format=image_format.value,
                 quality=quality,
                 stats=stats,
                 filename=file.filename or "image.jpg"
